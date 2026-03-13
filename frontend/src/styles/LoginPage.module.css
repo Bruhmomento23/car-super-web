@@ -1,0 +1,156 @@
+.container {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff; /* solid white for minimal look */
+  padding: 0; /* no padding, use card margin for spacing */
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  overflow: hidden; /* prevent page scroll */
+  box-sizing: border-box;
+}
+
+/* replace card with full-screen split panels */
+.imagePane {
+  flex: 1 1 80%;
+  background: center/cover no-repeat;
+  min-height: 100vh;
+}
+
+.formPane {
+  flex: 1 1 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* sidebar visible at all sizes now */
+
+/* tablets and above keep both panels visible, no rule needed */
+
+@media (max-width: 500px) {
+  /* hide image on very small devices only */
+  .imagePane { display: none; }
+  .formPane { width: 100vw; }
+  .form { padding: 3rem 2rem; max-width: 100%; }
+  .title { font-size: 1.5rem; }
+  .subtitle { font-size: 1.125rem; margin-bottom: 1.25rem; }
+  .logo { font-size: 2.5rem; }
+}
+.form {
+  padding: 4rem 3rem;
+  flex: 1;
+  max-width: 500px; /* wider form */
+  overflow-y: auto; /* allow form scrolling if needed */
+  max-height: 90vh; /* constrain form height to avoid overall scroll */
+}
+
+.logo {
+  font-size: 3rem;
+  margin-bottom: 0.75rem;
+}
+
+.title {
+  font-size: 2rem;
+  margin-bottom: 0.25rem;
+  color: #222;
+  font-weight: 700;
+}
+
+.subtitle {
+  font-size: 1.25rem;
+  margin-bottom: 1.75rem;
+  color: #555;
+}
+.field {
+  margin-bottom: 1.25rem;
+  text-align: left;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #444;
+}
+
+.field input {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box; /* ensure padding included in width */
+}
+
+.field input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+
+.button {
+  width: 100%;
+  padding: 0.85rem;
+  box-sizing: border-box;
+  background: linear-gradient(90deg, #007bff, #0056d6);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.125rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.1s;
+}
+
+.button:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.button:hover {
+  background-color: #0056b3;
+}
+
+.outlineButton {
+  width: 100%;
+  padding: 0.85rem;
+  box-sizing: border-box;
+  margin-top: 0.75rem;
+  background: transparent;
+  color: #007bff;
+  border: 2px solid #007bff;
+  border-radius: 8px;
+  font-size: 1.125rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.outlineButton:hover {
+  background-color: #007bff;
+  color: white;
+}
+
+.error {
+  color: #d93025;
+  margin-bottom: 1rem;
+}
+
+.linksRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+.forgotLink {
+  font-size: 0.875rem;
+  color: #007bff;
+  text-decoration: none;
+}
+
+.forgotLink:hover {
+  text-decoration: underline;
+}
+

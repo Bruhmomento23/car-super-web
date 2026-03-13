@@ -1,0 +1,12 @@
+/* global styles to prevent page scrolling */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden !important;
+}
+
+/* ensure the root container also fills height */
+#root, .App {
+  height: 100%;
+}
