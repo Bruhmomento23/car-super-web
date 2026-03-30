@@ -1,19 +1,22 @@
 import * as React from 'react';
 import { alpha, styled } from '@mui/material/styles';
-import Box from '@mui/material/Box';
-import AppBar from '@mui/material/AppBar';
-import Toolbar from '@mui/material/Toolbar';
-import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
-import Container from '@mui/material/Container';
-import Divider from '@mui/material/Divider';
-import MenuItem from '@mui/material/MenuItem';
-import Drawer from '@mui/material/Drawer';
+import { 
+  Box, AppBar, Toolbar, Button, IconButton, Container, 
+  Divider, MenuItem, Drawer, Menu, Typography, Stack 
+} from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import AccountCircle from '@mui/icons-material/AccountCircle';
+import LogoutIcon from '@mui/icons-material/Logout';
+import PersonIcon from '@mui/icons-material/Person';
+import { Link } from 'react-router-dom';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from '../backend/Firebase_config';
+
+// Icons/Theme Components
 import ColorModeIconDropdown from '../theme/ColorModelIconDropdown';
 import SitemarkIcon from './SitemarkIcon';
-import { Link } from 'react-router-dom';
+
 const StyledToolbar = styled(Toolbar)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
@@ -32,6 +35,29 @@ const StyledToolbar = styled(Toolbar)(({ theme }) => ({
 
 export default function AppAppBar() {
   const [open, setOpen] = React.useState(false);
+  const [user, setUser] = React.useState<any>(null);
+  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const isMenuOpen = Boolean(anchorEl);
+
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleLogout = async () => {
+    handleMenuClose();
+    await signOut(auth);
+  };
 
   const toggleDrawer = (newOpen: boolean) => () => {
     setOpen(newOpen);
@@ -52,39 +78,74 @@ export default function AppAppBar() {
         <StyledToolbar variant="dense" disableGutters>
           <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', px: 0 }}>
             <SitemarkIcon />
-            <Box sx={{ display: { xs: 'none', md: 'flex' } }}>
-              <Button variant="text" color="info" size="small" component={Link} to="/">
-                Home
-              </Button>
-              <Button variant="text" color="info" size="small" component={Link} to="/Services">
-                Services
-              </Button>
-            <Button variant="text" color="info" size="small" component={Link} to="/Bookings">
-                My Bookings
-              </Button>
-              <Button variant="text" color="info" size="small"  component={Link} to="/Contact" sx={{ minWidth: 0 }}>
-                Contact Us
-              </Button>
+            <Box sx={{ display: { xs: 'none', md: 'flex' }, ml: 2 }}>
+              
+              {user && (
+                <>
+                <Button variant="text" color="info" size="small" component={Link} to="/">Home</Button>
+                  <Button variant="text" color="info" size="small" component={Link} to="/Services">Services</Button>
+                  <Button variant="text" color="info" size="small" component={Link} to="/Bookings">My Bookings</Button>
+                  <Button variant="text" color="info" size="small" component={Link} to="/Contact">Contact Us</Button>
+                </>
+              )}
             </Box>
           </Box>
-          <Box
-            sx={{
-              display: { xs: 'none', md: 'flex' },
-              gap: 1,
-              alignItems: 'center',
-            }}
-          >
-            <Button color="primary" variant="text" size="small"component={Link} 
-  to="/SignIn">
-              Sign in
-            </Button>
-            <Button color="primary" variant="contained" size="small" component={Link} to="/SignUp">
-              Sign up
-            </Button>
-            <ColorModeIconDropdown />
+
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1, alignItems: 'center' }}>
+            {!user ? (
+              <>
+                <Button color="primary" variant="text" size="small" component={Link} to="/SignIn">Sign in</Button>
+                <Button color="primary" variant="contained" size="small" component={Link} to="/SignUp">Sign up</Button>
+                {/* Keep theme toggle outside if logged out for easier access */}
+                <ColorModeIconDropdown />
+              </>
+            ) : (
+              <>
+                <IconButton
+                  size="large"
+                  onClick={handleProfileMenuOpen}
+                  color="inherit"
+                  sx={{ p: 0.5 }}
+                >
+                  <AccountCircle color="primary" fontSize="large" />
+                </IconButton>
+                <Menu
+                  anchorEl={anchorEl}
+                  open={isMenuOpen}
+                  onClose={handleMenuClose}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                  disableScrollLock
+                  PaperProps={{
+                    sx: { mt: 1.5, minWidth: 200, borderRadius: 3, p: 1 }
+                  }}
+                >
+                  <Box sx={{ px: 2, py: 1 }}>
+                    <Typography variant="subtitle2" noWrap>{user.email}</Typography>
+                  </Box>
+                  <Divider sx={{ my: 1 }} />
+                  
+                  {/* Theme Toggle moved INSIDE the menu */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1 }}>
+                    <Typography variant="body2">Appearance</Typography>
+                    <ColorModeIconDropdown />
+                  </Box>
+                  
+                  <Divider sx={{ my: 1 }} />
+                  
+                  <MenuItem onClick={handleMenuClose} component={Link} to="/Profile">
+                    <PersonIcon fontSize="small" sx={{ mr: 1.5 }} /> Profile
+                  </MenuItem>
+                  <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
+                    <LogoutIcon fontSize="small" sx={{ mr: 1.5 }} /> Logout
+                  </MenuItem>
+                </Menu>
+              </>
+            )}
           </Box>
+
+          {/* Mobile View */}
           <Box sx={{ display: { xs: 'flex', md: 'none' }, gap: 1 }}>
-            <ColorModeIconDropdown size="medium" />
             <IconButton aria-label="Menu button" onClick={toggleDrawer(true)}>
               <MenuIcon />
             </IconButton>
@@ -92,40 +153,42 @@ export default function AppAppBar() {
               anchor="top"
               open={open}
               onClose={toggleDrawer(false)}
-              PaperProps={{
-                sx: {
-                  top: 'var(--template-frame-height, 0px)',
-                },
-              }}
+              disableScrollLock
+              PaperProps={{ sx: { top: 'var(--template-frame-height, 0px)' } }}
             >
               <Box sx={{ p: 2, backgroundColor: 'background.default' }}>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                  }}
-                >
-                  <IconButton onClick={toggleDrawer(false)}>
-                    <CloseRoundedIcon />
-                  </IconButton>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                   <Typography variant="h6" fontWeight="bold">Menu</Typography>
+                   <IconButton onClick={toggleDrawer(false)}><CloseRoundedIcon /></IconButton>
                 </Box>
-                <MenuItem>Features</MenuItem>
-                <MenuItem>Testimonials</MenuItem>
-                <MenuItem>Highlights</MenuItem>
-                <MenuItem>Pricing</MenuItem>
-                <MenuItem>FAQ</MenuItem>
-                <MenuItem>Blog</MenuItem>
-                <Divider sx={{ my: 3 }} />
-                <MenuItem>
-                  <Button color="primary" variant="contained" fullWidth>
-                    Sign up
+                
+                <MenuItem component={Link} to="/" onClick={toggleDrawer(false)}>Home</MenuItem>
+                {user && (
+                  <>
+                    <MenuItem component={Link} to="/Services" onClick={toggleDrawer(false)}>Services</MenuItem>
+                    <MenuItem component={Link} to="/Bookings" onClick={toggleDrawer(false)}>My Bookings</MenuItem>
+                    <MenuItem component={Link} to="/Profile" onClick={toggleDrawer(false)}>Profile</MenuItem>
+                    <MenuItem component={Link} to="/Contact" onClick={toggleDrawer(false)}>Contact Us</MenuItem>
+                  </>
+                )}
+                
+                <Divider sx={{ my: 2 }} />
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, mb: 2 }}>
+                  <Typography variant="body2">Theme</Typography>
+                  <ColorModeIconDropdown />
+                </Box>
+
+                {!user ? (
+                  <Stack spacing={1}>
+                    <Button color="primary" variant="contained" fullWidth component={Link} to="/SignUp" onClick={toggleDrawer(false)}>Sign up</Button>
+                    <Button color="primary" variant="outlined" fullWidth component={Link} to="/SignIn" onClick={toggleDrawer(false)}>Sign in</Button>
+                  </Stack>
+                ) : (
+                  <Button color="error" variant="contained" fullWidth onClick={() => { handleLogout(); setOpen(false); }}>
+                    Logout
                   </Button>
-                </MenuItem>
-                <MenuItem>
-                  <Button color="primary" variant="outlined" fullWidth>
-                    Sign in
-                  </Button>
-                </MenuItem>
+                )}
               </Box>
             </Drawer>
           </Box>

@@ -20,6 +20,7 @@ export default function LandingPage(props: { disableCustomTheme?: boolean }) {
         <MainContent />
         <Latest />
       </Container>
+      
     </AppTheme>
   );
 }

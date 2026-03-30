@@ -18,6 +18,9 @@ import AppTheme from '../../theme/AppTheme';
 import ColorModeSelect from '../../theme/ColorModeSelect';
 import { GoogleIcon, FacebookIcon, SitemarkIcon } from '../../components/CustomIcons';
 import { Link as RouterLink } from 'react-router-dom'; // The Router navigation link
+import { auth } from '../../backend/Firebase_config';
+import { setPersistence, signInWithEmailAndPassword, browserSessionPersistence } from "firebase/auth"; // Import Firebase Authentication functions
+import { useNavigate } from 'react-router-dom';
 
 console.log('SignIn page rendered');
 
@@ -64,10 +67,38 @@ const SignInContainer = styled(Stack)(({ theme }) => ({
 }));
 
 export default function SignIn(props: { disableCustomTheme?: boolean }) {
-  const [emailError, setEmailError] = React.useState(false);
-  const [emailErrorMessage, setEmailErrorMessage] = React.useState('');
-  const [passwordError, setPasswordError] = React.useState(false);
-  const [passwordErrorMessage, setPasswordErrorMessage] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const navigate = useNavigate();
+  const SigninwithEmailAndPassword = async (event: { preventDefault: () => void; }) => {
+    // If this is inside a <form>, prevent the default refresh
+    if (event) event.preventDefault(); 
+
+    try {
+      await setPersistence(auth, browserSessionPersistence);
+      await signInWithEmailAndPassword(auth, email, password);
+      
+      // Success! Now move to the home page
+       console.log('User signed in successfully');
+        navigate('/');
+      
+      
+    } catch (error) {
+      // If it fails (e.g., email already in use), 
+      // the code stays on this page so the user can see the error.
+      console.error("Sign up error:", error);
+      alert(error); 
+    }
+  };
+
+
+
+
+  
+  // const [emailError, setEmailError] = React.useState(false);
+  // const [emailErrorMessage, setEmailErrorMessage] = React.useState('');
+  // const [passwordError, setPasswordError] = React.useState(false);
+  // const [passwordErrorMessage, setPasswordErrorMessage] = React.useState('');
   const [open, setOpen] = React.useState(false);
 
   const handleClickOpen = () => {
@@ -78,44 +109,9 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
     setOpen(false);
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    if (emailError || passwordError) {
-      event.preventDefault();
-      return;
-    }
-    const data = new FormData(event.currentTarget);
-    console.log({
-      email: data.get('email'),
-      password: data.get('password'),
-    });
-  };
 
-  const validateInputs = () => {
-    const email = document.getElementById('email') as HTMLInputElement;
-    const password = document.getElementById('password') as HTMLInputElement;
 
-    let isValid = true;
 
-    if (!email.value || !/\S+@\S+\.\S+/.test(email.value)) {
-      setEmailError(true);
-      setEmailErrorMessage('Please enter a valid email address.');
-      isValid = false;
-    } else {
-      setEmailError(false);
-      setEmailErrorMessage('');
-    }
-
-    if (!password.value || password.value.length < 6) {
-      setPasswordError(true);
-      setPasswordErrorMessage('Password must be at least 6 characters long.');
-      isValid = false;
-    } else {
-      setPasswordError(false);
-      setPasswordErrorMessage('');
-    }
-
-    return isValid;
-  };
 
   return (
     <AppTheme {...props}>
@@ -133,7 +129,7 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
           </Typography>
           <Box
             component="form"
-            onSubmit={handleSubmit}
+            // onSubmit={}
             noValidate
             sx={{
               display: 'flex',
@@ -145,8 +141,8 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
             <FormControl>
               <FormLabel htmlFor="email">Email</FormLabel>
               <TextField
-                error={emailError}
-                helperText={emailErrorMessage}
+                // error={emailError}
+                // helperText={emailErrorMessage}
                 id="email"
                 type="email"
                 name="email"
@@ -156,14 +152,15 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
                 required
                 fullWidth
                 variant="outlined"
-                color={emailError ? 'error' : 'primary'}
+                onChange={(e) => setEmail(e.target.value)}
+                // color={emailError ? 'error' : 'primary'}
               />
             </FormControl>
             <FormControl>
               <FormLabel htmlFor="password">Password</FormLabel>
               <TextField
-                error={passwordError}
-                helperText={passwordErrorMessage}
+                // error={passwordError}
+                // helperText={passwordErrorMessage}
                 name="password"
                 placeholder="••••••"
                 type="password"
@@ -173,7 +170,8 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
                 required
                 fullWidth
                 variant="outlined"
-                color={passwordError ? 'error' : 'primary'}
+                onChange={(e) => setPassword(e.target.value)}
+                // color={passwordError ? 'error' : 'primary'}
               />
             </FormControl>
             <FormControlLabel
@@ -185,7 +183,7 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
               type="submit"
               fullWidth
               variant="contained"
-              onClick={validateInputs}
+              onClick={SigninwithEmailAndPassword}
             >
               Sign in
             </Button>

@@ -11,6 +11,7 @@ import Services from './features/home/Services';
 import Bookings from './features/home/Users_Bookings';
 import { Routes, Route } from 'react-router-dom'; // <--- Add this import
 import AboutUs from './features/home/aboutus';
+import Profile from './features/home/Profile';
 
 //  App.tsx (The Boss / The Layout)
 // This is the "Brain" of your specific application. It decides what shows up on the screen and where it goes.
@@ -40,7 +41,7 @@ export default function App(props: { disableCustomTheme?: boolean }) {
               <MainContent />
               <Latest />
             </Container>
-            <Footer />
+            
           </>
         } />
   
@@ -52,7 +53,14 @@ export default function App(props: { disableCustomTheme?: boolean }) {
             <Footer />
           </>
         } />
-
+        <Route path="/Profile" element={
+          <>
+          
+            <AppAppBar /> 
+            <Profile></Profile>
+            <Footer />
+          </>
+        } />
           
         <Route path="/Bookings" element={
           <>

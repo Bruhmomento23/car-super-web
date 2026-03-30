@@ -16,7 +16,10 @@ import { styled } from '@mui/material/styles';
 import AppTheme from '../../theme/AppTheme';
 import ColorModeSelect from '../../theme/ColorModeSelect';
 import { GoogleIcon, FacebookIcon, SitemarkIcon } from '../../components/CustomIcons';
-
+import { auth, db } from '../../backend/Firebase_config';
+import {setPersistence, browserSessionPersistence,createUserWithEmailAndPassword, updateProfile} from 'firebase/auth'; // Import Firebase Authentication functions
+import { useNavigate } from 'react-router-dom';
+import { doc, setDoc } from 'firebase/firestore';
 const Card = styled(MuiCard)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
@@ -60,63 +63,68 @@ const SignUpContainer = styled(Stack)(({ theme }) => ({
 }));
 
 export default function SignUp(props: { disableCustomTheme?: boolean }) {
-  const [emailError, setEmailError] = React.useState(false);
-  const [emailErrorMessage, setEmailErrorMessage] = React.useState('');
-  const [passwordError, setPasswordError] = React.useState(false);
-  const [passwordErrorMessage, setPasswordErrorMessage] = React.useState('');
-  const [nameError, setNameError] = React.useState(false);
-  const [nameErrorMessage, setNameErrorMessage] = React.useState('');
+  // const [emailError, setEmailError] = React.useState(false);
+  // const [emailErrorMessage, setEmailErrorMessage] = React.useState('');
+  // const [passwordError, setPasswordError] = React.useState(false);
+  // const [passwordErrorMessage, setPasswordErrorMessage] = React.useState('');
+  // const [nameError, setNameError] = React.useState(false);
+  // const [nameErrorMessage, setNameErrorMessage] = React.useState('');
+  // Inside your component:
+const navigate = useNavigate();
+const [fullName,setFullName] = React.useState('');
+const [email, setEmail] = React.useState('');
+const [password, setPassword] = React.useState('');
+const [phoneNumber, setPhoneNumber] = React.useState('');
+const SignUpWithEmailAndPassword = async (event: React.FormEvent) => {
+  if (event) event.preventDefault();
 
-  const validateInputs = () => {
-    const email = document.getElementById('email') as HTMLInputElement;
-    const password = document.getElementById('password') as HTMLInputElement;
-    const name = document.getElementById('name') as HTMLInputElement;
+  let newUser = null; // Keep track of the user to delete if Firestore fails
 
-    let isValid = true;
+  try {
+    // 1. Create User in Firebase Auth
+    await setPersistence(auth, browserSessionPersistence);
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    newUser = userCredential.user; 
 
-    if (!email.value || !/\S+@\S+\.\S+/.test(email.value)) {
-      setEmailError(true);
-      setEmailErrorMessage('Please enter a valid email address.');
-      isValid = false;
+    // 2. Update Auth Profile
+    await updateProfile(newUser, { displayName: fullName });
+
+    // 3. Create User Document in Firestore
+    try {
+      await setDoc(doc(db, "users", newUser.uid), {
+        uid: newUser.uid,
+        fullName: fullName,
+        email: email,
+        phoneNumber: phoneNumber,
+        createdAt: new Date().toISOString(),
+        role: 'user'
+      });
+      
+      console.log('User registered in Auth & Firestore');
+      navigate('/'); 
+
+    } catch (firestoreError) {
+      // If Firestore fails, delete the Auth user so they aren't "stuck"
+      if (newUser) {
+        await newUser.delete();
+      }
+      throw firestoreError; // Pass the error to the outer catch
+    }
+
+  } catch (error: any) {
+    console.error("Sign up error:", error.code);
+    
+    // Better user messaging
+    if (error.code === 'auth/email-already-in-use') {
+      alert("This email is already registered. Try logging in!");
+    } else if (error.code === 'permission-denied') {
+      alert("Permission denied: Check your Firestore rules!");
     } else {
-      setEmailError(false);
-      setEmailErrorMessage('');
+      alert(error.message);
     }
-
-    if (!password.value || password.value.length < 6) {
-      setPasswordError(true);
-      setPasswordErrorMessage('Password must be at least 6 characters long.');
-      isValid = false;
-    } else {
-      setPasswordError(false);
-      setPasswordErrorMessage('');
-    }
-
-    if (!name.value || name.value.length < 1) {
-      setNameError(true);
-      setNameErrorMessage('Name is required.');
-      isValid = false;
-    } else {
-      setNameError(false);
-      setNameErrorMessage('');
-    }
-
-    return isValid;
-  };
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    if (nameError || emailError || passwordError) {
-      event.preventDefault();
-      return;
-    }
-    const data = new FormData(event.currentTarget);
-    console.log({
-      name: data.get('name'),
-      lastName: data.get('lastName'),
-      email: data.get('email'),
-      password: data.get('password'),
-    });
-  };
+  }
+};
+    
 
   return (
     <AppTheme {...props}>
@@ -134,7 +142,7 @@ export default function SignUp(props: { disableCustomTheme?: boolean }) {
           </Typography>
           <Box
             component="form"
-            onSubmit={handleSubmit}
+            onSubmit={SignUpWithEmailAndPassword}
             sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
           >
             <FormControl>
@@ -146,11 +154,24 @@ export default function SignUp(props: { disableCustomTheme?: boolean }) {
                 fullWidth
                 id="name"
                 placeholder="Jon Snow"
-                error={nameError}
-                helperText={nameErrorMessage}
-                color={nameError ? 'error' : 'primary'}
+                onChange={(e) => setFullName(e.target.value)}
+
               />
             </FormControl>
+            <FormControl>
+          <FormLabel htmlFor="phone">Phone Number</FormLabel>
+          <TextField
+            required
+            fullWidth
+            id="phone"
+            placeholder="+65 1234 5678"
+            name="phone"
+            autoComplete="tel"
+            type="tel"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+          />
+        </FormControl>
             <FormControl>
               <FormLabel htmlFor="email">Email</FormLabel>
               <TextField
@@ -161,9 +182,8 @@ export default function SignUp(props: { disableCustomTheme?: boolean }) {
                 name="email"
                 autoComplete="email"
                 variant="outlined"
-                error={emailError}
-                helperText={emailErrorMessage}
-                color={passwordError ? 'error' : 'primary'}
+                onChange={(e) => setEmail(e.target.value)}
+
               />
             </FormControl>
             <FormControl>
@@ -177,9 +197,7 @@ export default function SignUp(props: { disableCustomTheme?: boolean }) {
                 id="password"
                 autoComplete="new-password"
                 variant="outlined"
-                error={passwordError}
-                helperText={passwordErrorMessage}
-                color={passwordError ? 'error' : 'primary'}
+                onChange={(e) => setPassword(e.target.value)}
               />
             </FormControl>
             <FormControlLabel
@@ -190,7 +208,8 @@ export default function SignUp(props: { disableCustomTheme?: boolean }) {
               type="submit"
               fullWidth
               variant="contained"
-              onClick={validateInputs}
+              onClick={SignUpWithEmailAndPassword}
+              
             >
               Sign up
             </Button>
