@@ -1,25 +1,22 @@
 import * as React from 'react';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Checkbox from '@mui/material/Checkbox';
-import CssBaseline from '@mui/material/CssBaseline';
-import Divider from '@mui/material/Divider';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import FormLabel from '@mui/material/FormLabel';
-import FormControl from '@mui/material/FormControl';
-import Link from '@mui/material/Link';
-import TextField from '@mui/material/TextField';
-import Typography from '@mui/material/Typography';
-import Stack from '@mui/material/Stack';
+import { 
+  Box, Button, Checkbox, CssBaseline, FormControlLabel, 
+  Link, TextField, Typography, Stack, Grid, CircularProgress, Alert, ToggleButton, ToggleButtonGroup
+} from '@mui/material';
 import MuiCard from '@mui/material/Card';
 import { styled } from '@mui/material/styles';
 import AppTheme from '../../theme/AppTheme';
 import ColorModeSelect from '../../theme/ColorModeSelect';
-import { GoogleIcon, FacebookIcon, SitemarkIcon } from '../../components/CustomIcons';
+import { SitemarkIcon } from '../../components/CustomIcons';
 import { auth, db } from '../../backend/Firebase_config';
-import {setPersistence, browserSessionPersistence,createUserWithEmailAndPassword, updateProfile} from 'firebase/auth'; // Import Firebase Authentication functions
+import { setPersistence, browserSessionPersistence, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import { sendEmailVerification } from 'firebase/auth';
+
+import { Link as RouterLink } from 'react-router-dom'; // The Router navigation link
+
+
 const Card = styled(MuiCard)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
@@ -31,7 +28,7 @@ const Card = styled(MuiCard)(({ theme }) => ({
   boxShadow:
     'hsla(220, 30%, 5%, 0.05) 0px 5px 15px 0px, hsla(220, 25%, 10%, 0.05) 0px 15px 35px -5px',
   [theme.breakpoints.up('sm')]: {
-    width: '450px',
+    width: '500px',
   },
   ...theme.applyStyles('dark', {
     boxShadow:
@@ -61,189 +58,273 @@ const SignUpContainer = styled(Stack)(({ theme }) => ({
     }),
   },
 }));
-
 export default function SignUp(props: { disableCustomTheme?: boolean }) {
-  // const [emailError, setEmailError] = React.useState(false);
-  // const [emailErrorMessage, setEmailErrorMessage] = React.useState('');
-  // const [passwordError, setPasswordError] = React.useState(false);
-  // const [passwordErrorMessage, setPasswordErrorMessage] = React.useState('');
-  // const [nameError, setNameError] = React.useState(false);
-  // const [nameErrorMessage, setNameErrorMessage] = React.useState('');
-  // Inside your component:
-const navigate = useNavigate();
-const [fullName,setFullName] = React.useState('');
-const [email, setEmail] = React.useState('');
-const [password, setPassword] = React.useState('');
-const [phoneNumber, setPhoneNumber] = React.useState('');
-const SignUpWithEmailAndPassword = async (event: React.FormEvent) => {
-  if (event) event.preventDefault();
+  const navigate = useNavigate();
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [accountType, setAccountType] = React.useState<'driver' | 'workshop'>('driver');
 
-  let newUser = null; // Keep track of the user to delete if Firestore fails
+  // --- NEW STATE VARIABLES ---
+  const [firstName, setFirstName] = React.useState('');
+  const [lastName, setLastName] = React.useState('');
+  const [username, setUsername] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [phoneNumber, setPhoneNumber] = React.useState('');
+  const [addressLine1, setAddressLine1] = React.useState('');
+  const [addressLine2, setAddressLine2] = React.useState('');
+  const [city, setCity] = React.useState('Singapore');
+  const [postalCode, setPostalCode] = React.useState('');
+  const [country, setCountry] = React.useState('');
+  const [termsAccepted, setTermsAccepted] = React.useState(false);
+  const [businessName, setBusinessName] = React.useState('');
+  const [businessRegistrationNumber, setBusinessRegistrationNumber] = React.useState('');
+
+// const Card = styled(MuiCard)(({ theme }) => ({
+//   display: 'flex',
+//   flexDirection: 'column',
+//   alignSelf: 'center',
+//   width: '100%',
+//   padding: theme.spacing(4),
+//   gap: theme.spacing(2),
+//   margin: 'auto',
+//   [theme.breakpoints.up('sm')]: { width: '600px' }, // Widened for grid fields
+// }));
+
+// const SignUpContainer = styled(Stack)(({ theme }) => ({
+//   minHeight: '100dvh',
+//   padding: theme.spacing(2),
+// }));
+const SignUpWithEmailAndPassword = async (event: React.FormEvent) => {
+  event.preventDefault();
+  if (!termsAccepted) return;
+  setError('');
+  setLoading(true);
+
+  let newUser = null;
+  const normalizedUsername = username.trim().toLowerCase();
 
   try {
-    // 1. Create User in Firebase Auth
+    // 1. CREATE THE AUTH USER FIRST 
+    // This makes the user "Authenticated" so Firestore rules let you search.
     await setPersistence(auth, browserSessionPersistence);
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    newUser = userCredential.user; 
+    newUser = userCredential.user;
 
-    // 2. Update Auth Profile
-    await updateProfile(newUser, { displayName: fullName });
+    if (accountType === 'driver') {
+      // Since newUser exists, request.auth is no longer null.
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('username', '==', normalizedUsername));
+      const querySnapshot = await getDocs(q);
 
-    // 3. Create User Document in Firestore
-    try {
-      await setDoc(doc(db, "users", newUser.uid), {
-        uid: newUser.uid,
-        fullName: fullName,
-        email: email,
-        phoneNumber: phoneNumber,
-        createdAt: new Date().toISOString(),
-        role: 'user'
-      });
-      
-      console.log('User registered in Auth & Firestore');
-      navigate('/'); 
-
-    } catch (firestoreError) {
-      // If Firestore fails, delete the Auth user so they aren't "stuck"
-      if (newUser) {
+      if (!querySnapshot.empty) {
         await newUser.delete();
+        setError('This username is already taken.');
+        return;
       }
-      throw firestoreError; // Pass the error to the outer catch
     }
 
-  } catch (error: any) {
-    console.error("Sign up error:", error.code);
-    
-    // Better user messaging
-    if (error.code === 'auth/email-already-in-use') {
-      alert("This email is already registered. Try logging in!");
-    } else if (error.code === 'permission-denied') {
-      alert("Permission denied: Check your Firestore rules!");
+    // Proceed with profile and Firestore
+    const normalizedFirstName = firstName.trim();
+    const normalizedLastName = lastName.trim();
+    const fullName = `${normalizedFirstName} ${normalizedLastName}`.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPhoneNumber = phoneNumber.trim();
+    const normalizedAddressLine1 = addressLine1.trim();
+    const normalizedAddressLine2 = addressLine2.trim();
+    const normalizedCity = city.trim();
+    const normalizedPostalCode = postalCode.trim();
+    const normalizedCountry = country.trim();
+
+    const normalizedBusinessName = businessName.trim();
+    const normalizedBusinessRegistrationNumber = businessRegistrationNumber.trim();
+
+    await updateProfile(newUser, { displayName: fullName || normalizedBusinessName || normalizedEmail });
+    await sendEmailVerification(newUser);
+
+    if (accountType === 'driver') {
+      await setDoc(doc(db, 'users', newUser.uid), {
+        uid: newUser.uid,
+        firstName: normalizedFirstName,
+        lastName: normalizedLastName,
+        fullName,
+        username: normalizedUsername,
+        email: normalizedEmail,
+        phoneNumber: normalizedPhoneNumber,
+        addressLine1: normalizedAddressLine1,
+        addressLine2: normalizedAddressLine2 || null,
+        city: normalizedCity,
+        postalCode: normalizedPostalCode,
+        country: normalizedCountry || null,
+        termsAccepted,
+        emailVerified: false,
+        profilePictureUrl: null,
+        lastSeen: null,
+        isOnline: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
     } else {
-      alert(error.message);
+      await setDoc(doc(db, 'workshop_owners', newUser.uid), {
+        id: newUser.uid,
+        email: normalizedEmail,
+        fullName,
+        phoneNumber: normalizedPhoneNumber,
+        businessName: normalizedBusinessName || null,
+        businessRegistrationNumber: normalizedBusinessRegistrationNumber || null,
+        verificationStatus: 'pending',
+        ownedWorkshopIds: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        profileImageUrl: null,
+        isActive: true,
+        verificationDocumentUrls: null,
+        verificationNotes: null,
+        verifiedAt: null,
+        verifiedBy: null,
+        termsAccepted,
+        emailVerified: false,
+      });
     }
+
+    navigate('/verify-email');
+        } catch (err: any) {
+    // If anything fails (network error, Firestore rules, etc.)
+    // and we already created the Auth user, delete them.
+    if (newUser) {
+      try {
+        await newUser.delete();
+      } catch (deleteError) {
+        console.error("Cleanup failed", deleteError);
+      }
+    }
+    setError(
+      err.code === 'auth/email-already-in-use'
+        ? 'An account with this email already exists.'
+        : err.code === 'auth/weak-password'
+        ? 'Password must be at least 6 characters.'
+        : err.code === 'auth/invalid-email'
+        ? 'Invalid email address.'
+        : err.message ?? 'Sign up failed. Please try again.'
+    );
+  } finally {
+    setLoading(false);
   }
 };
-    
 
-  return (
+ return (
     <AppTheme {...props}>
-      <CssBaseline enableColorScheme />
       <ColorModeSelect sx={{ position: 'fixed', top: '1rem', right: '1rem' }} />
-      <SignUpContainer direction="column" justifyContent="space-between">
+      <CssBaseline enableColorScheme />
+      <SignUpContainer direction="column" justifyContent="center">
         <Card variant="outlined">
           <SitemarkIcon />
-          <Typography
-            component="h1"
-            variant="h4"
-            sx={{ width: '100%', fontSize: 'clamp(2rem, 10vw, 2.15rem)' }}
-          >
-            Sign up
+          <Typography variant="h4" sx={{ mb: 1 }}>Sign up</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Select account type first.
           </Typography>
-          <Box
-            component="form"
-            onSubmit={SignUpWithEmailAndPassword}
-            sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
-          >
-            <FormControl>
-              <FormLabel htmlFor="name">Full name</FormLabel>
-              <TextField
-                autoComplete="name"
-                name="name"
-                required
-                fullWidth
-                id="name"
-                placeholder="Jon Snow"
-                onChange={(e) => setFullName(e.target.value)}
-
-              />
-            </FormControl>
-            <FormControl>
-          <FormLabel htmlFor="phone">Phone Number</FormLabel>
-          <TextField
-            required
+          <ToggleButtonGroup
+            value={accountType}
+            exclusive
+            color="primary"
             fullWidth
-            id="phone"
-            placeholder="+65 1234 5678"
-            name="phone"
-            autoComplete="tel"
-            type="tel"
-            value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
-          />
-        </FormControl>
-            <FormControl>
-              <FormLabel htmlFor="email">Email</FormLabel>
-              <TextField
-                required
-                fullWidth
-                id="email"
-                placeholder="your@email.com"
-                name="email"
-                autoComplete="email"
-                variant="outlined"
-                onChange={(e) => setEmail(e.target.value)}
+            onChange={(_e, nextValue: 'driver' | 'workshop' | null) => {
+              if (nextValue) {
+                setAccountType(nextValue);
+                setError('');
+              }
+            }}
+            sx={{ mb: 2 }}
+          >
+            <ToggleButton value="driver">Driver Account</ToggleButton>
+            <ToggleButton value="workshop">Workshop Account</ToggleButton>
+          </ToggleButtonGroup>
+          
+          <Box component="form" onSubmit={SignUpWithEmailAndPassword} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            
+            <Grid container spacing={2}>
+              {accountType === 'driver' ? (
+                <>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField required fullWidth label="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField required fullWidth label="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField required fullWidth label="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+                  </Grid>
+                </>
+              ) : (
+                <>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField required fullWidth label="Full Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField fullWidth label="Business Name (Optional)" value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField fullWidth label="Business Registration Number (Optional)" value={businessRegistrationNumber} onChange={(e) => setBusinessRegistrationNumber(e.target.value)} />
+                  </Grid>
+                </>
+              )}
 
-              />
-            </FormControl>
-            <FormControl>
-              <FormLabel htmlFor="password">Password</FormLabel>
-              <TextField
-                required
-                fullWidth
-                name="password"
-                placeholder="••••••"
-                type="password"
-                id="password"
-                autoComplete="new-password"
-                variant="outlined"
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </FormControl>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField required fullWidth label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField required fullWidth label="Phone" type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <TextField required fullWidth label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              </Grid>
+
+              {accountType === 'driver' && (
+                <>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField required fullWidth label="Address Line 1" value={addressLine1}  onChange={(e) => setAddressLine1(e.target.value)} />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 8 }}>
+                    <TextField fullWidth label="Address Line 2 (Optional)" value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)} />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField required fullWidth label="Postal Code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField required fullWidth label="City" value={city} onChange={(e) => setCity(e.target.value)} />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField fullWidth label="Country (Optional)" value={country} onChange={(e) => setCountry(e.target.value)} />
+                  </Grid>
+                </>
+              )}
+            </Grid>
+
             <FormControlLabel
-              control={<Checkbox value="allowExtraEmails" color="primary" />}
-              label="I want to receive updates via email."
+              control={<Checkbox required checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} />}
+              label="I accept the terms and conditions"
             />
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              onClick={SignUpWithEmailAndPassword}
-              
-            >
-              Sign up
+
+            {error && (
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
+                {error}
+              </Alert>
+            )}
+            <Button type="submit" fullWidth variant="contained" size="large" disabled={loading} sx={{ height: 48 }}>
+              {loading ? <CircularProgress size={22} color="inherit" /> : accountType === 'driver' ? 'Create Driver Account' : 'Create Workshop Account'}
             </Button>
-          </Box>
-          <Divider>
-            <Typography sx={{ color: 'text.secondary' }}>or</Typography>
-          </Divider>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Button
-              fullWidth
-              variant="outlined"
-              onClick={() => alert('Sign up with Google')}
-              startIcon={<GoogleIcon />}
-            >
-              Sign up with Google
-            </Button>
-            <Button
-              fullWidth
-              variant="outlined"
-              onClick={() => alert('Sign up with Facebook')}
-              startIcon={<FacebookIcon />}
-            >
-              Sign up with Facebook
-            </Button>
-            <Typography sx={{ textAlign: 'center' }}>
-              Already have an account?{' '}
-              <Link
-                href="/material-ui/getting-started/templates/sign-in/"
-                variant="body2"
-                sx={{ alignSelf: 'center' }}
-              >
-                Sign in
-              </Link>
-            </Typography>
+                        <Typography sx={{ textAlign: 'center' }}>
+                          Already have an account?{' '}
+                          <Link
+                            component={RouterLink} // Use the alias here
+                             to="/SignIn"
+                            variant="body2"
+                            sx={{ alignSelf: 'center' }}
+                          >
+                            Sign in
+                          </Link>
+                        </Typography>
           </Box>
         </Card>
       </SignUpContainer>

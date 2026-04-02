@@ -12,6 +12,8 @@ import Bookings from './features/home/Users_Bookings';
 import { Routes, Route } from 'react-router-dom'; // <--- Add this import
 import AboutUs from './features/home/aboutus';
 import Profile from './features/home/Profile';
+import VerifyEmail from './features/authentication/VerifyEmail';
+import WorkshopPortal from './features/workshop_owner/WorkshopPortal';
 
 //  App.tsx (The Boss / The Layout)
 // This is the "Brain" of your specific application. It decides what shows up on the screen and where it goes.
@@ -50,7 +52,7 @@ export default function App(props: { disableCustomTheme?: boolean }) {
           
             <AppAppBar /> 
             <Services></Services>
-            <Footer />
+            
           </>
         } />
         <Route path="/Profile" element={
@@ -58,7 +60,7 @@ export default function App(props: { disableCustomTheme?: boolean }) {
           
             <AppAppBar /> 
             <Profile></Profile>
-            <Footer />
+            
           </>
         } />
           
@@ -67,7 +69,7 @@ export default function App(props: { disableCustomTheme?: boolean }) {
           
             <AppAppBar /> 
             <Bookings></Bookings>
-            <Footer />
+          
           </>
         } />
 
@@ -76,7 +78,7 @@ export default function App(props: { disableCustomTheme?: boolean }) {
           
             <AppAppBar /> 
             <AboutUs></AboutUs>
-            <Footer />
+          
           </>
         } />
 
@@ -85,6 +87,8 @@ export default function App(props: { disableCustomTheme?: boolean }) {
         
         {/* Sign Up Page Route - No Navbar, No Footer */}
         <Route path="/SignUp" element={<SignUp />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/WorkshopPortal" element={<WorkshopPortal />} />
       </Routes>
 
     </AppTheme>

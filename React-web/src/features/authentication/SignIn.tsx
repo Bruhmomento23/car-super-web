@@ -12,15 +12,20 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Stack from '@mui/material/Stack';
 import MuiCard from '@mui/material/Card';
+import CircularProgress from '@mui/material/CircularProgress';
+import Alert from '@mui/material/Alert';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import { styled } from '@mui/material/styles';
 import ForgotPassword from '../../components/ForgotPassword';
 import AppTheme from '../../theme/AppTheme';
 import ColorModeSelect from '../../theme/ColorModeSelect';
 import { GoogleIcon, FacebookIcon, SitemarkIcon } from '../../components/CustomIcons';
 import { Link as RouterLink } from 'react-router-dom'; // The Router navigation link
-import { auth } from '../../backend/Firebase_config';
-import { setPersistence, signInWithEmailAndPassword, browserSessionPersistence } from "firebase/auth"; // Import Firebase Authentication functions
+import { auth, db } from '../../backend/Firebase_config';
+import { setPersistence, signInWithEmailAndPassword, browserSessionPersistence, signOut } from "firebase/auth"; // Import Firebase Authentication functions
 import { useNavigate } from 'react-router-dom';
+import { doc, getDoc } from 'firebase/firestore';
 
 console.log('SignIn page rendered');
 
@@ -66,28 +71,58 @@ const SignInContainer = styled(Stack)(({ theme }) => ({
   },
 }));
 
+const friendlySignInError = (code: string) => {
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found': return 'Incorrect email or password.';
+    case 'auth/too-many-requests': return 'Too many failed attempts. Please try again later.';
+    case 'auth/invalid-email': return 'Invalid email address.';
+    case 'auth/user-disabled': return 'This account has been disabled.';
+    default: return 'Sign in failed. Please try again.';
+  }
+};
+
 export default function SignIn(props: { disableCustomTheme?: boolean }) {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [accountType, setAccountType] = React.useState<'driver' | 'workshop'>('driver');
   const navigate = useNavigate();
-  const SigninwithEmailAndPassword = async (event: { preventDefault: () => void; }) => {
-    // If this is inside a <form>, prevent the default refresh
-    if (event) event.preventDefault(); 
 
+  const SigninwithEmailAndPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setLoading(true);
     try {
       await setPersistence(auth, browserSessionPersistence);
-      await signInWithEmailAndPassword(auth, email, password);
-      
-      // Success! Now move to the home page
-       console.log('User signed in successfully');
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const signedInUser = userCredential.user;
+
+      if (accountType === 'driver') {
+        const userDoc = await getDoc(doc(db, 'users', signedInUser.uid));
+        if (!userDoc.exists()) {
+          await signOut(auth);
+          setError('This account is not registered as a driver account.');
+          return;
+        }
         navigate('/');
-      
-      
-    } catch (error) {
-      // If it fails (e.g., email already in use), 
-      // the code stays on this page so the user can see the error.
-      console.error("Sign up error:", error);
-      alert(error); 
+        return;
+      }
+
+      const ownerDoc = await getDoc(doc(db, 'workshop_owners', signedInUser.uid));
+      if (!ownerDoc.exists()) {
+        await signOut(auth);
+        setError('This account is not registered as a workshop account.');
+        return;
+      }
+
+      navigate('/WorkshopPortal');
+    } catch (err: any) {
+      setError(friendlySignInError(err.code));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -95,10 +130,6 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
 
 
   
-  // const [emailError, setEmailError] = React.useState(false);
-  // const [emailErrorMessage, setEmailErrorMessage] = React.useState('');
-  // const [passwordError, setPasswordError] = React.useState(false);
-  // const [passwordErrorMessage, setPasswordErrorMessage] = React.useState('');
   const [open, setOpen] = React.useState(false);
 
   const handleClickOpen = () => {
@@ -127,9 +158,28 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
           >
             Sign in
           </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Choose the account type you want to access.
+          </Typography>
+          <ToggleButtonGroup
+            value={accountType}
+            exclusive
+            color="primary"
+            fullWidth
+            onChange={(_e, nextValue: 'driver' | 'workshop' | null) => {
+              if (nextValue) {
+                setAccountType(nextValue);
+                setError('');
+              }
+            }}
+            sx={{ mt: 1, mb: 1 }}
+          >
+            <ToggleButton value="driver">Driver Account</ToggleButton>
+            <ToggleButton value="workshop">Workshop Account</ToggleButton>
+          </ToggleButtonGroup>
           <Box
             component="form"
-            // onSubmit={}
+            onSubmit={SigninwithEmailAndPassword}
             noValidate
             sx={{
               display: 'flex',
@@ -153,7 +203,7 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
                 fullWidth
                 variant="outlined"
                 onChange={(e) => setEmail(e.target.value)}
-                // color={emailError ? 'error' : 'primary'}
+              disabled={loading}
               />
             </FormControl>
             <FormControl>
@@ -171,7 +221,7 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
                 fullWidth
                 variant="outlined"
                 onChange={(e) => setPassword(e.target.value)}
-                // color={passwordError ? 'error' : 'primary'}
+              disabled={loading}
               />
             </FormControl>
             <FormControlLabel
@@ -179,13 +229,19 @@ export default function SignIn(props: { disableCustomTheme?: boolean }) {
               label="Remember me"
             />
             <ForgotPassword open={open} handleClose={handleClose} />
+            {error && (
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
+                {error}
+              </Alert>
+            )}
             <Button
               type="submit"
               fullWidth
               variant="contained"
-              onClick={SigninwithEmailAndPassword}
+              disabled={loading}
+              sx={{ height: 44 }}
             >
-              Sign in
+              {loading ? <CircularProgress size={22} color="inherit" /> : accountType === 'driver' ? 'Sign in as Driver' : 'Sign in as Workshop'}
             </Button>
             <Link
               component="button"
