@@ -31,11 +31,24 @@ import Footer from '../../components/Footer';
 
 // API Service
 import { fetchSingaporeWorkshops } from '../services/workshopServices';
+import BookingDialog from './BookingDialog';
+import { auth } from '../../backend/Firebase_config';
 
 export default function Services(props: { disableCustomTheme?: boolean }) {
   const [workshops, setWorkshops] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [visibleCount, setVisibleCount] = React.useState(3);
+  const [bookingDialogOpen, setBookingDialogOpen] = React.useState(false);
+  const [selectedWorkshop, setSelectedWorkshop] = React.useState<{ id: string; title: string; location: string } | null>(null);
+
+  const handleBookNow = (ws: any) => {
+    if (!auth.currentUser) {
+      window.location.href = '/SignIn';
+      return;
+    }
+    setSelectedWorkshop({ id: ws.id, title: ws.title, location: ws.location });
+    setBookingDialogOpen(true);
+  };
 
   React.useEffect(() => {
     const getWorkshops = async () => {
@@ -171,7 +184,7 @@ export default function Services(props: { disableCustomTheme?: boolean }) {
                         <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 1 }}>
                           Estimate for Service
                         </Typography>
-                        <Button variant="contained" sx={{ borderRadius: 2, px: 4 }}>Book Now</Button>
+                        <Button variant="contained" sx={{ borderRadius: 2, px: 4 }} onClick={() => handleBookNow(ws)}>Book Now</Button>
                       </Box>
                     </Box>
                   </Box>
@@ -195,6 +208,12 @@ export default function Services(props: { disableCustomTheme?: boolean }) {
         </Grid>
       </Container>
       <Footer />
+
+      <BookingDialog
+        open={bookingDialogOpen}
+        onClose={() => setBookingDialogOpen(false)}
+        workshop={selectedWorkshop}
+      />
     </AppTheme>
   );
 }
