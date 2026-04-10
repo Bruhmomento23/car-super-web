@@ -1,6 +1,20 @@
 const GOOGLE_MAPS_API_KEY = 'AIzaSyB8bqefbnONT_D8Iybubgv_DOfkx_w3JQY';
 
-export const fetchSingaporeWorkshops = async () => {
+export interface WorkshopListItem {
+  id: string;
+  title: string;
+  location: string;
+  img: string;
+  rating: number;
+  reviews: number;
+  priceLevel: number;
+  priceText: string;
+  isOpen: boolean;
+  bookedToday: number;
+  displayPrice: number;
+}
+
+export const fetchSingaporeWorkshops = async (): Promise<WorkshopListItem[]> => {
   const url = 'https://places.googleapis.com/v1/places:searchText';
   
   const requestBody = {
@@ -28,7 +42,7 @@ export const fetchSingaporeWorkshops = async () => {
     const data = await response.json();
     if (!data.places) return [];
 
-    return data.places.map((place: any) => {
+    return data.places.map((place: any): WorkshopListItem => {
       const priceLabels: Record<number, string> = { 1: "Inexpensive", 2: "Moderate", 3: "Premium", 4: "Luxury" };
       
       // FIX: Changed maxWidthProp to maxWidthPx to resolve 403 error

@@ -190,17 +190,41 @@ export default function BookingDialog({ open, onClose, workshop }: Props) {
               <Typography
                 variant="caption"
                 color="text.secondary"
-                sx={{ display: 'block', mb: 0.6 }}
+                sx={{ display: 'block', mb: 0.75, fontWeight: 600 }}
               >
                 Notes (optional)
               </Typography>
-              <TextField
+              <Box
+                component="textarea"
                 value={notes}
-                onChange={e => setNotes(e.target.value)}
-                fullWidth
-                multiline
-                minRows={3}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)}
                 placeholder="Describe the issue or anything the workshop should know"
+                maxLength={500}
+                rows={4}
+                sx={{
+                  width: '100%',
+                  resize: 'vertical',
+                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  bgcolor: 'background.paper',
+                  color: 'text.primary',
+                  font: 'inherit',
+                  lineHeight: 1.5,
+                  px: 1.75,
+                  py: 1.4,
+                  boxSizing: 'border-box',
+                  outline: 'none',
+                  minHeight: 112,
+                  '&::placeholder': {
+                    color: 'text.disabled',
+                    opacity: 1,
+                  },
+                  '&:focus': {
+                    borderColor: 'primary.main',
+                    boxShadow: theme => `0 0 0 2px ${theme.palette.primary.main}22`,
+                  },
+                }}
               />
             </Box>
 

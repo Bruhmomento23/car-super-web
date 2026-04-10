@@ -15,6 +15,7 @@ import Chip from '@mui/material/Chip';
 import Skeleton from '@mui/material/Skeleton';
 import CardMedia from '@mui/material/CardMedia';
 import Stack from '@mui/material/Stack'; 
+import { useNavigate } from 'react-router-dom';
 
 // Icons
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -30,24 +31,16 @@ import AppAppBar from '../../components/AppAppBar';
 import Footer from '../../components/Footer';
 
 // API Service
-import { fetchSingaporeWorkshops } from '../services/workshopServices';
-import BookingDialog from './BookingDialog';
-import { auth } from '../../backend/Firebase_config';
+import { fetchSingaporeWorkshops, type WorkshopListItem } from '../services/workshopServices';
 
 export default function Services(props: { disableCustomTheme?: boolean }) {
-  const [workshops, setWorkshops] = React.useState<any[]>([]);
+  const navigate = useNavigate();
+  const [workshops, setWorkshops] = React.useState<WorkshopListItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [visibleCount, setVisibleCount] = React.useState(3);
-  const [bookingDialogOpen, setBookingDialogOpen] = React.useState(false);
-  const [selectedWorkshop, setSelectedWorkshop] = React.useState<{ id: string; title: string; location: string } | null>(null);
 
-  const handleBookNow = (ws: any) => {
-    if (!auth.currentUser) {
-      window.location.href = '/SignIn';
-      return;
-    }
-    setSelectedWorkshop({ id: ws.id, title: ws.title, location: ws.location });
-    setBookingDialogOpen(true);
+  const handleViewWorkshop = (ws: WorkshopListItem) => {
+    navigate(`/Services/${ws.id}`, { state: { workshop: ws } });
   };
 
   React.useEffect(() => {
@@ -66,6 +59,11 @@ export default function Services(props: { disableCustomTheme?: boolean }) {
 
   const handleViewMore = () => {
     setVisibleCount((prev) => prev + 3);
+  };
+
+  const getWorkshopTags = (ws: WorkshopListItem) => {
+    const baseTags = [ws.isOpen ? 'Open now' : 'Request anytime', ws.priceText];
+    return baseTags;
   };
 
   return (
@@ -172,19 +170,20 @@ export default function Services(props: { disableCustomTheme?: boolean }) {
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', mt: 3 }}>
                       <Box sx={{ display: 'flex', gap: 1 }}>
                         {/* DYNAMIC TAGS */}
-                        {ws.tags?.map((tag: string) => (
+                        {getWorkshopTags(ws).map((tag) => (
                           <Chip key={tag} label={tag} size="small" sx={{ borderRadius: 1, fontWeight: 'bold' }} />
-                        )) || <Chip label="Verified" size="small" sx={{ borderRadius: 1, fontWeight: 'bold' }} />}
+                        ))}
                       </Box>
                       <Box sx={{ textAlign: 'right' }}>
-                        {/* DYNAMIC PRICE */}
                         <Typography variant="h5" fontWeight="800">
-                          {ws.price ? `from $${ws.price}` : 'Price on request'}
+                          from ${ws.displayPrice}
                         </Typography>
                         <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 1 }}>
                           Estimate for Service
                         </Typography>
-                        <Button variant="contained" sx={{ borderRadius: 2, px: 4 }} onClick={() => handleBookNow(ws)}>Book Now</Button>
+                        <Button variant="contained" sx={{ borderRadius: 2, px: 4 }} onClick={() => handleViewWorkshop(ws)}>
+                          View Workshop
+                        </Button>
                       </Box>
                     </Box>
                   </Box>
@@ -208,12 +207,6 @@ export default function Services(props: { disableCustomTheme?: boolean }) {
         </Grid>
       </Container>
       <Footer />
-
-      <BookingDialog
-        open={bookingDialogOpen}
-        onClose={() => setBookingDialogOpen(false)}
-        workshop={selectedWorkshop}
-      />
     </AppTheme>
   );
 }

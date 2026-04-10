@@ -14,6 +14,7 @@ import AboutUs from './features/home/aboutus';
 import Profile from './features/home/Profile';
 import VerifyEmail from './features/authentication/VerifyEmail';
 import WorkshopPortal from './features/workshop_owner/WorkshopPortal';
+import WorkshopDetails from './features/home/WorkshopDetails';
 
 //  App.tsx (The Boss / The Layout)
 // This is the "Brain" of your specific application. It decides what shows up on the screen and where it goes.
@@ -53,6 +54,12 @@ export default function App(props: { disableCustomTheme?: boolean }) {
             <AppAppBar /> 
             <Services></Services>
             
+          </>
+        } />
+        <Route path="/Services/:workshopId" element={
+          <>
+            <AppAppBar />
+            <WorkshopDetails />
           </>
         } />
         <Route path="/Profile" element={
