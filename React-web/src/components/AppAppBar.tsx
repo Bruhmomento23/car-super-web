@@ -9,7 +9,7 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import AccountCircle from '@mui/icons-material/AccountCircle';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PersonIcon from '@mui/icons-material/Person';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '../backend/Firebase_config';
 
@@ -34,6 +34,7 @@ const StyledToolbar = styled(Toolbar)(({ theme }) => ({
 }));
 
 export default function AppAppBar() {
+  const navigate = useNavigate();
   const [open, setOpen] = React.useState(false);
   const [user, setUser] = React.useState<any>(null);
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -57,6 +58,7 @@ export default function AppAppBar() {
   const handleLogout = async () => {
     handleMenuClose();
     await signOut(auth);
+    navigate('/');
   };
 
   const toggleDrawer = (newOpen: boolean) => () => {

@@ -9,7 +9,12 @@ import BuildIcon from '@mui/icons-material/Build';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import { auth, db } from '../../backend/Firebase_config';
 import { collection, getDocs } from 'firebase/firestore';
-import { upsertWorkshop, createBookingRequest } from '../services/workshopFirestore';
+import { useNavigate } from 'react-router-dom';
+import {
+  upsertWorkshop,
+  createBookingRequest,
+  createConversationWithBookingMessage,
+} from '../services/workshopFirestore';
 
 const SERVICE_TYPES = [
   'Oil Change',
@@ -31,12 +36,12 @@ interface Props {
 }
 
 export default function BookingDialog({ open, onClose, workshop }: Props) {
+  const navigate = useNavigate();
   const [serviceType, setServiceType] = React.useState('');
   const [preferredDate, setPreferredDate] = React.useState('');
   const [notes, setNotes] = React.useState('');
   const [vehiclePlate, setVehiclePlate] = React.useState('');
   const [loading, setLoading] = React.useState(false);
-  const [success, setSuccess] = React.useState(false);
   const [error, setError] = React.useState('');
 
   // Pre-fill vehicle plate from user's primary vehicle
@@ -76,20 +81,37 @@ export default function BookingDialog({ open, onClose, workshop }: Props) {
         title: workshop.title,
         location: workshop.location,
       });
-      await createBookingRequest({
+      const customerName =
+        auth.currentUser.displayName ??
+        auth.currentUser.email ??
+        'Customer';
+
+      const bookingRequestId = await createBookingRequest({
         workshopId,
         workshopName: workshop.title,
         customerId: auth.currentUser.uid,
-        customerName:
-          auth.currentUser.displayName ??
-          auth.currentUser.email ??
-          'Customer',
+        customerName,
+        customerEmail: auth.currentUser.email || '',
         vehiclePlate,
         serviceType,
         notes,
         preferredDate,
       });
-      setSuccess(true);
+
+      const conversationId = await createConversationWithBookingMessage({
+        bookingRequestId,
+        workshopId,
+        workshopName: workshop.title,
+        customerId: auth.currentUser.uid,
+        customerName,
+        serviceType,
+        vehiclePlate,
+        preferredDate,
+        notes,
+      });
+
+      handleClose();
+      navigate(`/Chat/${conversationId}`);
     } catch (e) {
       console.error(e);
       setError('Failed to send booking request. Please try again.');
@@ -103,7 +125,6 @@ export default function BookingDialog({ open, onClose, workshop }: Props) {
     setPreferredDate('');
     setNotes('');
     setError('');
-    setSuccess(false);
     onClose();
   };
 
@@ -116,13 +137,7 @@ export default function BookingDialog({ open, onClose, workshop }: Props) {
       </DialogTitle>
 
       <DialogContent>
-        {success ? (
-          <Alert severity="success" sx={{ mt: 1 }}>
-            <strong>Request sent!</strong> The workshop will review your booking
-            and confirm your appointment shortly.
-          </Alert>
-        ) : (
-          <Stack spacing={2.5} sx={{ mt: 0.5 }}>
+        <Stack spacing={2.5} sx={{ mt: 0.5 }}>
             {/* Workshop info */}
             <Box
               sx={{
@@ -233,23 +248,20 @@ export default function BookingDialog({ open, onClose, workshop }: Props) {
               <Chip label="No commitment" size="small" variant="outlined" />
             </Box>
           </Stack>
-        )}
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={handleClose} color="inherit">
-          {success ? 'Close' : 'Cancel'}
+          Cancel
         </Button>
-        {!success && (
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={loading}
-            startIcon={loading ? <CircularProgress size={16} color="inherit" /> : undefined}
-          >
-            {loading ? 'Sending…' : 'Send Request'}
-          </Button>
-        )}
+        <Button
+          variant="contained"
+          onClick={handleSubmit}
+          disabled={loading}
+          startIcon={loading ? <CircularProgress size={16} color="inherit" /> : undefined}
+        >
+          {loading ? 'Starting Chat…' : 'Send Request'}
+        </Button>
       </DialogActions>
     </Dialog>
   );

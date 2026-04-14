@@ -8,13 +8,14 @@ import Footer from './components/Footer';
 import SignIn from './features/authentication/SignIn'; // Ensure this path is correct
 import SignUp from './features/authentication/Signup';
 import Services from './features/home/Services';
-import Bookings from './features/home/Users_Bookings';
+import Bookings from './features/home/BookingsPage';
 import { Routes, Route } from 'react-router-dom'; // <--- Add this import
 import AboutUs from './features/home/aboutus';
 import Profile from './features/home/Profile';
 import VerifyEmail from './features/authentication/VerifyEmail';
 import WorkshopPortal from './features/workshop_owner/WorkshopPortal';
 import WorkshopDetails from './features/home/WorkshopDetails';
+import WorkshopChat from './features/home/WorkshopChat';
 
 //  App.tsx (The Boss / The Layout)
 // This is the "Brain" of your specific application. It decides what shows up on the screen and where it goes.
@@ -77,6 +78,12 @@ export default function App(props: { disableCustomTheme?: boolean }) {
             <AppAppBar /> 
             <Bookings></Bookings>
           
+          </>
+        } />
+        <Route path="/Chat/:conversationId" element={
+          <>
+            <AppAppBar />
+            <WorkshopChat />
           </>
         } />
 

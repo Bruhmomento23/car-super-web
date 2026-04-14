@@ -13,8 +13,9 @@ import { auth, db } from '../../backend/Firebase_config';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import {
   doc, getDoc, collection, query, where, orderBy,
-  onSnapshot, updateDoc, serverTimestamp, addDoc,
+  onSnapshot, updateDoc, serverTimestamp, addDoc, getDocs, arrayUnion,
 } from 'firebase/firestore';
+import emailjs from '@emailjs/browser';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AddBusinessIcon from '@mui/icons-material/AddBusiness';
 import SearchIcon from '@mui/icons-material/Search';
@@ -26,39 +27,57 @@ import BuildIcon from '@mui/icons-material/Build';
 import CancelIcon from '@mui/icons-material/Cancel';
 import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
 import { getWorkshopsByIds, searchUnclaimedWorkshops } from '../services/workshopFirestore';
-import type { BookingRequest, WorkshopRecord } from '../services/workshopFirestore';
+import type { BookingRequest, ConversationRecord, WorkshopRecord } from '../services/workshopFirestore';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string }> = {
   pending:     { label: 'Pending',     color: '#d97706', bg: '#fef3c7' },
   confirmed:   { label: 'Confirmed',   color: '#2563eb', bg: '#dbeafe' },
-  in_progress: { label: 'In Progress', color: '#7c3aed', bg: '#ede9fe' },
+  inProgress:  { label: 'In Progress', color: '#7c3aed', bg: '#ede9fe' },
   completed:   { label: 'Completed',   color: '#059669', bg: '#d1fae5' },
   cancelled:   { label: 'Cancelled',   color: '#dc2626', bg: '#fee2e2' },
+  rejected:    { label: 'Rejected',    color: '#dc2626', bg: '#fee2e2' },
 };
 
 const KPI_ITEMS = [
   { key: 'pending',     label: 'Pending',     icon: <HourglassEmptyIcon />, color: '#d97706' },
   { key: 'confirmed',   label: 'Confirmed',   icon: <ThumbUpIcon />,        color: '#2563eb' },
-  { key: 'in_progress', label: 'In Progress', icon: <BuildIcon />,          color: '#7c3aed' },
+  { key: 'inProgress',  label: 'In Progress', icon: <BuildIcon />,          color: '#7c3aed' },
   { key: 'completed',   label: 'Completed',   icon: <CheckCircleIcon />,    color: '#059669' },
   { key: 'cancelled',   label: 'Cancelled',   icon: <CancelIcon />,         color: '#dc2626' },
+  { key: 'rejected',    label: 'Rejected',    icon: <CancelIcon />,         color: '#dc2626' },
 ];
 
 const NEXT_STATUSES: Record<string, string[]> = {
   pending:     ['confirmed', 'cancelled'],
-  confirmed:   ['in_progress', 'cancelled'],
-  in_progress: ['completed', 'cancelled'],
+  confirmed:   ['inProgress', 'cancelled'],
+  inProgress:  ['completed', 'cancelled'],
   completed:   [],
   cancelled:   [],
+  rejected:    [],
 };
+
+const EMAILJS_SERVICE_ID = 'service_pv68208';
+const EMAILJS_TEMPLATE_ID = 'template_new7h8g';
+const EMAILJS_PUBLIC_KEY = 'J6Ve2HiDRf6Qoq5zt';
 
 function formatTs(ts: any): string {
   if (!ts) return '—';
   try { return ts.toDate().toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' }); }
   catch { return '—'; }
+}
+
+function formatPreferredDate(value: any): string {
+  if (!value) return '—';
+  try {
+    const dt = value?.toDate ? value.toDate() : new Date(value);
+    return dt.toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return String(value);
+  }
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -71,6 +90,7 @@ export default function WorkshopPortal() {
   const [loading, setLoading]     = React.useState(true);
   const [workshops, setWorkshops] = React.useState<WorkshopRecord[]>([]);
   const [bookings, setBookings]   = React.useState<BookingRequest[]>([]);
+  const [conversationMap, setConversationMap] = React.useState<Record<string, string>>({});
   const [scopeId, setScopeId]           = React.useState('all');
   const [statusFilter, setStatusFilter] = React.useState('all');
 
@@ -85,6 +105,35 @@ export default function WorkshopPortal() {
   const [claimSubmitting, setClaimSubmitting] = React.useState(false);
   const [claimDone, setClaimDone]   = React.useState(false);
   const [claimError, setClaimError] = React.useState('');
+  const [claimEmailWarning, setClaimEmailWarning] = React.useState('');
+
+  const syncOwnerWorkshops = React.useCallback(async (ownerUid: string, knownIds: string[] = []) => {
+    // Read workshops manually approved for this owner.
+    const [ownerIdsLinkedSnap, ownerIdLinkedSnap] = await Promise.all([
+      getDocs(query(collection(db, 'workshops'), where('ownerIds', 'array-contains', ownerUid))),
+      getDocs(query(collection(db, 'workshops'), where('ownerId', '==', ownerUid))),
+    ]);
+
+    const workshopDocs = [...ownerIdsLinkedSnap.docs, ...ownerIdLinkedSnap.docs];
+    const approvedWorkshopIds = workshopDocs
+      .map(d => ({ id: d.id, data: d.data() as Record<string, any> }))
+      .filter(w => w.data.isClaimed === true || w.data.claimStatus === 'claimed')
+      .map(w => w.id);
+
+    const linkedWorkshopIds = new Set<string>([
+      ...knownIds,
+      ...approvedWorkshopIds,
+    ]);
+
+    const mergedIds = Array.from(linkedWorkshopIds);
+    await updateDoc(doc(db, 'workshop_owners', ownerUid), {
+      ownedWorkshopIds: mergedIds,
+      verificationStatus: mergedIds.length ? 'verified' : 'pending',
+      updatedAt: serverTimestamp(),
+    });
+
+    return mergedIds;
+  }, []);
 
   // Auth
   React.useEffect(() => {
@@ -93,11 +142,13 @@ export default function WorkshopPortal() {
       setAuthUser(user);
       const snap = await getDoc(doc(db, 'workshop_owners', user.uid));
       if (!snap.exists()) { navigate('/SignIn'); return; }
-      setOwnerData({ id: snap.id, ...snap.data() });
+      const owner = { id: snap.id, ...snap.data() } as any;
+      const syncedIds = await syncOwnerWorkshops(user.uid, owner.ownedWorkshopIds ?? []);
+      setOwnerData({ ...owner, ownedWorkshopIds: syncedIds });
       setLoading(false);
     });
     return () => unsub();
-  }, [navigate]);
+  }, [navigate, syncOwnerWorkshops]);
 
   // Fetch owned workshop details
   React.useEffect(() => {
@@ -111,15 +162,40 @@ export default function WorkshopPortal() {
     const ids: string[] = ownerData?.ownedWorkshopIds ?? [];
     if (!ids.length) return;
     const q = query(
-      collection(db, 'booking_requests_test'),
+      collection(db, 'bookings'),
       where('workshopId', 'in', ids.slice(0, 10)),
-      orderBy('createdAt', 'desc'),
     );
     const unsub = onSnapshot(q, snap => {
-      setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() } as BookingRequest)));
+      const rows = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as BookingRequest))
+        .sort((a: any, b: any) => {
+          const aMs = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+          const bMs = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+          return bMs - aMs;
+        });
+      setBookings(rows);
     });
     return () => unsub();
   }, [ownerData]);
+
+  React.useEffect(() => {
+    if (!authUser?.uid) return;
+    const chatsQ = query(
+      collection(db, 'chats'),
+      where('participants', 'array-contains', authUser.uid),
+    );
+    const unsub = onSnapshot(chatsQ, snap => {
+      const mapping: Record<string, string> = {};
+      snap.docs.forEach((docSnap) => {
+        const data = { id: docSnap.id, ...docSnap.data() } as ConversationRecord;
+        (data.bookingIds || []).forEach((bookingId) => {
+          mapping[bookingId] = data.id;
+        });
+      });
+      setConversationMap(mapping);
+    });
+    return () => unsub();
+  }, [authUser?.uid]);
 
   // Derived
   const scopedBookings  = scopeId === 'all' ? bookings : bookings.filter(b => b.workshopId === scopeId);
@@ -128,12 +204,12 @@ export default function WorkshopPortal() {
   const hasWorkshops = !!(ownerData?.ownedWorkshopIds?.length);
 
   const handleStatusChange = async (bookingId: string, newStatus: string) => {
-    await updateDoc(doc(db, 'booking_requests_test', bookingId), {
+    await updateDoc(doc(db, 'bookings', bookingId), {
       status: newStatus, updatedAt: serverTimestamp(),
     });
   };
 
-  const handleSignOut = async () => { await signOut(auth); navigate('/SignIn'); };
+  const handleSignOut = async () => { await signOut(auth); navigate('/'); };
 
   const handleClaimSearch = async () => {
     if (!claimQuery.trim()) return;
@@ -144,16 +220,45 @@ export default function WorkshopPortal() {
 
   const handleClaimSubmit = async () => {
     if (!claimSelected || !claimBizName || !authUser) return;
-    setClaimSubmitting(true); setClaimError('');
+    setClaimSubmitting(true); setClaimError(''); setClaimEmailWarning('');
     try {
-      await addDoc(collection(db, 'workshop_claims_test'), {
+      const claimRef = await addDoc(collection(db, 'workshop_claims_test'), {
         workshopId: claimSelected.id, ownerId: authUser.uid,
         businessName: claimBizName, businessRegNumber: claimUEN,
         status: 'pending_review', createdAt: serverTimestamp(),
       });
-      await updateDoc(doc(db, 'workshops_test', claimSelected.id), {
-        claimStatus: 'pending_review', updatedAt: serverTimestamp(),
+      await updateDoc(doc(db, 'workshops', claimSelected.id), {
+        claimStatus: 'pending_review',
+        isClaimed: false,
+        updatedAt: serverTimestamp(),
       });
+
+      try {
+        await emailjs.send(
+          EMAILJS_SERVICE_ID,
+          EMAILJS_TEMPLATE_ID,
+          {
+            owner_name: ownerData?.fullName || authUser.displayName || 'Workshop Owner',
+            owner_email: authUser.email || '',
+            business_name: claimBizName,
+            uen: claimUEN || 'Not provided',
+            workshop_name: claimSelected.name,
+            workshop_address: claimSelected.address,
+            claim_id: claimRef.id,
+            submitted_at: new Date().toLocaleString('en-SG'),
+            name: ownerData?.fullName || authUser.displayName || 'Workshop Owner',
+            time: new Date().toLocaleString('en-SG'),
+            email: authUser.email || '',
+          },
+          {
+            publicKey: EMAILJS_PUBLIC_KEY,
+          },
+        );
+      } catch (emailErr) {
+        console.error('Email notification failed:', emailErr);
+        setClaimEmailWarning('Claim submitted successfully, but notification email could not be sent.');
+      }
+
       setClaimDone(true);
     } catch { setClaimError('Submission failed. Please try again.'); }
     finally { setClaimSubmitting(false); }
@@ -163,6 +268,7 @@ export default function WorkshopPortal() {
     setClaimOpen(false); setClaimQuery(''); setClaimResults([]);
     setClaimSelected(null); setClaimBizName(''); setClaimUEN('');
     setClaimDone(false); setClaimError('');
+    setClaimEmailWarning('');
   };
 
   if (loading) return (
@@ -298,9 +404,13 @@ export default function WorkshopPortal() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {filteredBookings.map(b => {
-                        const cfg = STATUS_CFG[b.status] ?? STATUS_CFG.pending;
-                        const nextSteps = NEXT_STATUSES[b.status] ?? [];
+                      {filteredBookings.map((b: any) => {
+                        const status = b.status || 'pending';
+                        const cfg = STATUS_CFG[status] ?? STATUS_CFG.pending;
+                        const nextSteps = NEXT_STATUSES[status] ?? [];
+                        const vehicleLabel = b.vehiclePlate || b.vehiclePlateNumber || b.vehicleModel || '—';
+                        const notesLabel = b.notes || b.issueDescription || b.bookingNotes || '—';
+                        const conversationId = conversationMap[b.id];
                         return (
                           <TableRow key={b.id} sx={{ '&:hover': { bgcolor: 'action.hover' }, '& td': { py: 1.5 } }}>
                             <TableCell>
@@ -315,12 +425,12 @@ export default function WorkshopPortal() {
                               <Stack direction="row" spacing={0.5} alignItems="center">
                                 <DirectionsCarIcon sx={{ fontSize: '0.9rem', color: 'text.disabled' }} />
                                 <Typography variant="body2" fontFamily="monospace" fontWeight={700} letterSpacing={1}>
-                                  {b.vehiclePlate || '—'}
+                                  {vehicleLabel}
                                 </Typography>
                               </Stack>
                             </TableCell>
                             <TableCell><Typography variant="body2">{b.serviceType}</Typography></TableCell>
-                            <TableCell><Typography variant="body2">{b.preferredDate || '—'}</Typography></TableCell>
+                            <TableCell><Typography variant="body2">{formatPreferredDate(b.preferredDateTime || b.preferredDate)}</Typography></TableCell>
                             {scopeId === 'all' && (
                               <TableCell>
                                 <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 160 }}>
@@ -329,8 +439,8 @@ export default function WorkshopPortal() {
                               </TableCell>
                             )}
                             <TableCell>
-                              <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 180 }} title={b.notes}>
-                                {b.notes || '—'}
+                              <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 180 }} title={notesLabel}>
+                                {notesLabel}
                               </Typography>
                             </TableCell>
                             <TableCell>
@@ -339,6 +449,14 @@ export default function WorkshopPortal() {
                             </TableCell>
                             <TableCell>
                               <Stack direction="row" spacing={0.5}>
+                                {conversationId && (
+                                  <Button size="small" variant="contained"
+                                    onClick={() => navigate(`/Chat/${conversationId}`)}
+                                    startIcon={<ChatOutlinedIcon />}
+                                    sx={{ fontSize: '0.68rem', py: 0.3, px: 1, textTransform: 'none' }}>
+                                    Chat
+                                  </Button>
+                                )}
                                 {nextSteps.map(ns => {
                                   const nCfg = STATUS_CFG[ns];
                                   return (
@@ -374,10 +492,15 @@ export default function WorkshopPortal() {
         <DialogTitle sx={{ fontWeight: 700 }}>Claim a Workshop</DialogTitle>
         <DialogContent>
           {claimDone ? (
-            <Alert severity="success" sx={{ mt: 1 }}>
-              <strong>Claim submitted!</strong> Our team will verify your ownership within 1–3 business days.
-              Once approved, bookings from this workshop will appear in your dashboard.
-            </Alert>
+            <Stack spacing={1.5} sx={{ mt: 1 }}>
+              <Alert severity="success">
+                <strong>Claim submitted!</strong> Admin has been emailed and your workshop remains pending until manual approval.
+              </Alert>
+              <Alert severity="info" variant="outlined">
+                Approval flow for now: admin sets <strong>isClaimed=true</strong> and owner linkage in the workshop document.
+              </Alert>
+              {claimEmailWarning && <Alert severity="warning">{claimEmailWarning}</Alert>}
+            </Stack>
           ) : claimSelected ? (
             <Stack spacing={2.5} sx={{ mt: 1 }}>
               <Alert severity="info">
